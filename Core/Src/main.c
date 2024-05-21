@@ -380,10 +380,10 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &msg2, data2) == HAL_OK){
 		if(msg2.StdId == 13){
 			HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3); //test led
-			if(data2[1] == 1){	//bij data '1' deur openen
+			if(data2[0] == 1){	//bij data '1' deur openen
 				htim16.Instance->CCR1 = 25;
 			}
-			else if(data2[1] == 0){ //bij data '0' deur sluiten
+			else if(data2[0] == 0){ //bij data '0' deur sluiten
 				htim16.Instance->CCR1 = 15;
 			}
 		}
