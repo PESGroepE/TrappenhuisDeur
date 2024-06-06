@@ -145,8 +145,8 @@ int main(void)
   while (1)
   {
 
-	  if (HAL_GPIO_ReadPin(sensorDeur_GPIO_Port, sensorDeur_Pin)){				//beweging gedetecteerd bij deur
-		  __HAL_TIM_SET_COUNTER(&htim6, 0);										//reset de timer
+	  if (HAL_GPIO_ReadPin(sensorDeur_GPIO_Port, sensorDeur_Pin)){							//beweging gedetecteerd bij deur
+		  __HAL_TIM_SET_COUNTER(&htim6, 0);													//reset de timer
 		  if(statusDeur == 0){
 			  statusDeur = 1;
 			  SendCANdeur(statusDeur);
@@ -154,8 +154,8 @@ int main(void)
 		  }
 	  }
 	  else{
-		  currentTimeDeur = __HAL_TIM_GET_COUNTER(&htim6);							//huidige tijd updaten
-		  if(currentTimeDeur >= 60000 && statusDeur == 1){							//1>6 seconde geen beweging
+		  currentTimeDeur = __HAL_TIM_GET_COUNTER(&htim6);									//huidige tijd updaten
+		  if(currentTimeDeur >= 60000 && statusDeur == 1){									//>6 seconde geen beweging
 			  statusDeur = 0;
 			  SendCANdeur(statusDeur);
 			  HAL_UART_Transmit(&huart2, tekstDeurDicht, sizeof(tekstDeurDicht), 100);
@@ -163,21 +163,21 @@ int main(void)
 		  }
 	  }
 
-	  if (HAL_GPIO_ReadPin(sensorLicht_GPIO_Port, sensorLicht_Pin)){			//beweging gedetecteerd bij deur
-		  __HAL_TIM_SET_COUNTER(&htim2, 0);										//reset de timer
+	  if (HAL_GPIO_ReadPin(sensorLicht_GPIO_Port, sensorLicht_Pin)){						//beweging gedetecteerd bij deur
+		  __HAL_TIM_SET_COUNTER(&htim2, 0);													//reset de timer
 		  if(statusLampen ==  0){
 			  statusLampen = 1;
 			  SendCANlampen(statusLampen);
 			  HAL_UART_Transmit(&huart2, tekstLampenAan, sizeof(tekstLampenAan), 100);
-			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);							//test led op bordje
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);										//test led op bordje
 		  }
 	  }
 	  else{
 		  currentTimeLampen = __HAL_TIM_GET_COUNTER(&htim2);
-		  if(currentTimeLampen >= 100000 && statusLampen == 1){							//>10 seconden
+		  if(currentTimeLampen >= 100000 && statusLampen == 1){								//>10 seconden
 			  statusLampen = 0;
 			  SendCANlampen(statusLampen);
-			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);							//test led op bordje
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);										//test led op bordje
 			  HAL_UART_Transmit(&huart2, tekstLampenUit, sizeof(tekstLampenUit), 100);
 		  }
 	  }
