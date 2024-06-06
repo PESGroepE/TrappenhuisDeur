@@ -42,6 +42,8 @@
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan1;
 
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart2;
@@ -56,8 +58,11 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_TIM6_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-
+void SendCANdeur(int status);
+void SendCANlampen(int status);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -103,10 +108,35 @@ int main(void)
   MX_USART2_UART_Init();
   MX_CAN1_Init();
   MX_TIM16_Init();
+  MX_TIM6_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_PWM_Start(&htim16, TIM_CHANNEL_1);
-  htim16.Instance->CCR1 = 15;
+  htim16.Instance->CCR1 = 15;					// deur/servo 'dicht'
+
+  uint8_t tekstDeurOpen[] = "Beweging gedetecteerd: Deur gaat open\r\n";
+  uint8_t tekstDeurDicht[] = "Geen beweging gedetecteerd: Deur gaat dicht\r\n";
+
+  uint8_t tekstLampenAan[] = "Beweging gedetecteerd: Lampen aan\r\n";
+  uint8_t tekstLampenUit[] = "Geen beweging gedetecteerd: Lampen uit\r\n";
+
+  int statusDeur = 0;
+  int statusLampen = 0;
+
+  uint32_t currentTimeDeur = 0;
+  uint32_t currentTimeLampen = 0;
+
+  HAL_TIM_Base_Start(&htim6);
+  HAL_TIM_Base_Start(&htim2);
+
+  /* 1 keer per seconde
+   *
+   * 1 = 32.000.000 / (3200 * 10.000)
+   * dus 10.000 is 1 seconden voor de timer
+   */
+
+
 
   /* USER CODE END 2 */
 
@@ -114,6 +144,46 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+	  if (HAL_GPIO_ReadPin(sensorDeur_GPIO_Port, sensorDeur_Pin)){				//beweging gedetecteerd bij deur
+		  __HAL_TIM_SET_COUNTER(&htim6, 0);										//reset de timer
+		  if(statusDeur == 0){
+			  statusDeur = 1;
+			  SendCANdeur(statusDeur);
+			  HAL_UART_Transmit(&huart2, tekstDeurOpen, sizeof(tekstDeurOpen), 100);
+		  }
+	  }
+	  else{
+		  currentTimeDeur = __HAL_TIM_GET_COUNTER(&htim6);							//huidige tijd updaten
+		  if(currentTimeDeur >= 60000 && statusDeur == 1){							//1>6 seconde geen beweging
+			  statusDeur = 0;
+			  SendCANdeur(statusDeur);
+			  HAL_UART_Transmit(&huart2, tekstDeurDicht, sizeof(tekstDeurDicht), 100);
+
+		  }
+	  }
+
+	  if (HAL_GPIO_ReadPin(sensorLicht_GPIO_Port, sensorLicht_Pin)){			//beweging gedetecteerd bij deur
+		  __HAL_TIM_SET_COUNTER(&htim2, 0);										//reset de timer
+		  if(statusLampen ==  0){
+			  statusLampen = 1;
+			  SendCANlampen(statusLampen);
+			  HAL_UART_Transmit(&huart2, tekstLampenAan, sizeof(tekstLampenAan), 100);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);							//test led op bordje
+		  }
+	  }
+	  else{
+		  currentTimeLampen = __HAL_TIM_GET_COUNTER(&htim2);
+		  if(currentTimeLampen >= 100000 && statusLampen == 1){							//>10 seconden
+			  statusLampen = 0;
+			  SendCANlampen(statusLampen);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);							//test led op bordje
+			  HAL_UART_Transmit(&huart2, tekstLampenUit, sizeof(tekstLampenUit), 100);
+		  }
+	  }
+
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -244,6 +314,89 @@ static void MX_CAN1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 3200 - 1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 300000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 3200 - 1;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 65535;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
   * @brief TIM16 Initialization Function
   * @param None
   * @retval None
@@ -359,12 +512,24 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pins : Sensor1_Pin sensorDeur_Pin */
+  GPIO_InitStruct.Pin = Sensor1_Pin|sensorDeur_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pin : LD3_Pin */
   GPIO_InitStruct.Pin = LD3_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : sensorLicht_Pin */
+  GPIO_InitStruct.Pin = sensorLicht_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(sensorLicht_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -387,6 +552,42 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 				htim16.Instance->CCR1 = 15;
 			}
 		}
+	}
+}
+
+void SendCANdeur(int status){
+	uint32_t mb;
+	CAN_TxHeaderTypeDef msg;
+    uint8_t data[8] = {0};
+
+    // Configureer het CAN bericht
+    msg.StdId = 20;
+    msg.IDE = CAN_ID_STD;
+    msg.RTR = CAN_RTR_DATA;
+    msg.DLC = 1;
+    msg.TransmitGlobalTime = DISABLE;
+
+	data[0] = status;
+	if (HAL_CAN_AddTxMessage(&hcan1, &msg, data, &mb) != HAL_OK) {
+		Error_Handler();
+	}
+}
+
+void SendCANlampen(int status){
+	uint32_t mb;
+	CAN_TxHeaderTypeDef msg;
+    uint8_t data[8] = {0};
+
+    // Configureer het CAN bericht
+    msg.StdId = 21;
+    msg.IDE = CAN_ID_STD;
+    msg.RTR = CAN_RTR_DATA;
+    msg.DLC = 1;
+    msg.TransmitGlobalTime = DISABLE;
+
+	data[0] = status;
+	if (HAL_CAN_AddTxMessage(&hcan1, &msg, data, &mb) != HAL_OK) {
+		Error_Handler();
 	}
 }
 
